@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F4C97">
+<title>Giro di gruppo</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{
+  --asfalto:#20252B;
+  --segnale:#0F4C97;
+  --giallo:#F2B705;
+  --carta:#F3F4F1;
+  --linea:#D5D8D2;
+  --muto:#5C646D;
+  --errore:#B3261E;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0}
+body{
+  font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:17px;line-height:1.4;
+  background:var(--carta);color:var(--asfalto);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+h1,h2,h3{font-family:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;margin:0;font-weight:700}
+.top{
+  background:var(--segnale);color:#fff;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 12px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.top h1{font-size:26px;letter-spacing:.01em}
+button{font:inherit;cursor:pointer}
+.btn,.btn-ghost,.btn-line,.btn-link{
+  min-height:44px;padding:0 16px;border-radius:8px;border:2px solid transparent;
+  font-weight:600;display:inline-flex;align-items:center;justify-content:center;
+  text-decoration:none;
+}
+.btn{background:var(--segnale);color:#fff}
+.btn-ghost{background:transparent;color:var(--segnale);border-color:var(--linea)}
+.btn-line{background:transparent;color:#fff;border-color:rgba(255,255,255,.7);min-height:40px}
+.btn-danger{color:var(--errore)}
+:focus-visible{outline:3px solid var(--giallo);outline-offset:2px}
+.status{background:#FDECEA;color:var(--errore);padding:10px 16px;font-weight:500}
+.giro-bar{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap;align-items:center}
+.giro-bar select{
+  flex:1 1 180px;min-height:44px;font:inherit;font-weight:600;padding:0 12px;
+  border:2px solid var(--asfalto);border-radius:8px;background:#fff;color:var(--asfalto);
+}
+.pick{background:var(--giallo);color:var(--asfalto);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:600}
+.pick .btn-line{color:var(--asfalto);border-color:var(--asfalto)}
+#map{height:44vh;min-height:280px;width:100%;background:#dfe3dc}
+#map.picking{cursor:crosshair;outline:4px solid var(--giallo);outline-offset:-4px}
+.panel{padding:16px 16px 40px;max-width:720px;margin:0 auto}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+.panel-head h2{font-size:28px}
+.stops{list-style:none;margin:0;padding:0}
+.stop{display:grid;grid-template-columns:36px 1fr;gap:12px;position:relative;padding-bottom:22px}
+.stop:not(:last-child)::before{content:"";position:absolute;left:17px;top:38px;bottom:0;width:2px;background:var(--linea)}
+.num{
+  width:36px;height:36px;border-radius:50%;background:var(--segnale);color:#fff;
+  display:grid;place-items:center;font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;font-size:18px;
+}
+.stop.next .num{background:var(--giallo);color:var(--asfalto)}
+.stop h3{font-size:22px;line-height:1.15}
+.tag{display:inline-block;background:var(--giallo);color:var(--asfalto);font-weight:600;font-size:14px;padding:1px 8px;border-radius:4px;margin-bottom:4px}
+.when{margin:2px 0 0;color:var(--muto);font-weight:500;text-transform:capitalize}
+.nota{margin:6px 0 0;white-space:pre-wrap}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.empty{padding:20px 0;color:var(--muto)}
+dialog{border:0;border-radius:12px;padding:0;width:min(92vw,460px);max-height:90vh;color:var(--asfalto)}
+dialog::backdrop{background:rgba(32,37,43,.55)}
+.dlg{padding:20px;display:grid;gap:12px}
+.dlg h2{font-size:26px}
+.dlg label{display:grid;gap:4px;font-weight:600}
+.dlg input,.dlg textarea{font:inherit;padding:10px 12px;border:2px solid var(--linea);border-radius:8px;min-height:44px;width:100%;background:#fff;color:var(--asfalto)}
+.dlg textarea{min-height:80px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.search{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.results{display:grid;gap:6px}
+.results button{text-align:left;background:#fff;border:2px solid var(--linea);border-radius:8px;padding:8px 10px;color:var(--asfalto)}
+.coord{margin:0;color:var(--muto);font-size:15px}
+.err{margin:0;color:var(--errore);font-weight:500;min-height:1.2em}
+.dlg-actions{display:flex;justify-content:flex-end;gap:8px}
+.pin span{
+  display:grid;place-items:center;width:30px;height:30px;border-radius:50%;
+  background:var(--segnale);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);
+  font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;font-size:16px;
+}
+.pin.next span{background:var(--giallo);color:var(--asfalto)}
+.pop h3{font-size:18px}
+.pop p{margin:2px 0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Giro di gruppo</h1>
+  <button id="authBtn" class="btn-line" type="button">Organizzatore</button>
+</header>
+<div id="status" class="status" role="status" hidden></div>
+
+<section class="giro-bar">
+  <label for="giroSelect" class="sr">Scegli il giro</label>
+  <select id="giroSelect"></select>
+  <button id="newGiroBtn" class="btn admin-only" type="button" hidden>Nuovo giro</button>
+  <button id="delGiroBtn" class="btn-ghost btn-danger admin-only" type="button" hidden>Elimina giro</button>
+</section>
+
+<div id="pickBanner" class="pick" hidden>
+  <span>Tocca la mappa per scegliere il punto</span>
+  <button id="pickCancel" class="btn-line" type="button">Annulla</button>
+</div>
+<div id="map"></div>
+
+<main class="panel">
+  <div class="panel-head">
+    <h2>Tappe</h2>
+    <button id="addBtn" class="btn admin-only" type="button" hidden>Aggiungi tappa</button>
+  </div>
+  <ol id="stops" class="stops"></ol>
+  <p id="empty" class="empty" hidden></p>
+</main>
+
+<dialog id="loginDlg">
+  <form id="loginForm" class="dlg">
+    <h2>Accesso organizzatore</h2>
+    <label>Email <input id="email" type="email" autocomplete="username" required></label>
+    <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+    <p id="loginErr" class="err"></p>
+    <div class="dlg-actions">
+      <button id="loginCancel" class="btn-ghost" type="button">Annulla</button>
+      <button class="btn" type="submit">Accedi</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tappaDlg">
+  <form id="tappaForm" class="dlg">
+    <h2 id="tappaTitle">Nuova tappa</h2>
+    <label>Nome della tappa <input id="fNome" type="text" maxlength="80" placeholder="Es. Pranzo al lago" required></label>
+    <div class="row">
+      <label>Data <input id="fData" type="date" required></label>
+      <label>Ora <input id="fOra" type="time"></label>
+    </div>
+    <label>Note <textarea id="fNota" maxlength="400" placeholder="Es. Ritrovo al parcheggio, pranzo libero"></textarea></label>
+    <div class="search">
+      <label>Cerca il luogo <input id="fQuery" type="search" placeholder="Es. Cefalù, lungomare"></label>
+      <button id="fSearchBtn" class="btn-ghost" type="button">Cerca</button>
+    </div>
+    <div id="fResults" class="results"></div>
+    <button id="fPickBtn" class="btn-ghost" type="button">Scegli il punto sulla mappa</button>
+    <p id="fCoord" class="coord">Nessun punto scelto.</p>
+    <p id="fErr" class="err"></p>
+    <div class="dlg-actions">
+      <button id="fCancel" class="btn-ghost" type="button">Annulla</button>
+      <button class="btn" type="submit">Salva tappa</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBwxfDrHGQH-1vJF6G5YEckyBNpuMFukBA",
+  authDomain: "giro-gruppo.firebaseapp.com",
+  projectId: "giro-gruppo",
+  storageBucket: "giro-gruppo.firebasestorage.app",
+  messagingSenderId: "149048973270",
+  appId: "1:149048973270:web:81794eee52551b13a4b677"
+};
+const ADMIN_EMAIL = "punto200hp@gmail.com";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const $ = s => document.querySelector(s);
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function store(key, value){ try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch(e){} return null; }
+function humanErr(err){
+  if (err && err.code === 'permission-denied') return "Non hai i permessi: serve l'accesso da organizzatore.";
+  if (err && err.code === 'unavailable') return "Connessione assente. Riprova tra poco.";
+  return "Qualcosa non ha funzionato. Riprova.";
+}
+function showStatus(msg){ const s = $('#status'); s.textContent = msg || ''; s.hidden = !msg; }
+
+const state = { user:null, isAdmin:false, giri:[], giroId:null, tappe:[], unsubTappe:null, editId:null, fit:true, started:false };
+
+// ---------- Mappa ----------
+const map = L.map('map').setView([42.5, 12.5], 6);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+
+// ---------- Utilità ----------
+function when(t){
+  let txt = '';
+  const d = new Date(t.data + 'T00:00');
+  if (!isNaN(d)) txt = d.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+  if (t.ora) txt += (txt ? ', ore ' : 'Ore ') + t.ora;
+  return txt;
+}
+function navUrl(t){ return 'https://www.google.com/maps/dir/?api=1&destination=' + t.lat + ',' + t.lng + '&travelmode=driving'; }
+function sortKey(t){ return (t.data || '') + ' ' + (t.ora || '00:00'); }
+
+// ---------- Auth ----------
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    signInAnonymously(auth).catch(() => showStatus("Impossibile collegarsi. Controlla la connessione."));
+    return;
+  }
+  state.user = user;
+  state.isAdmin = !!user.email && user.email.toLowerCase() === ADMIN_EMAIL;
+  document.querySelectorAll('.admin-only').forEach(e => { e.hidden = !state.isAdmin; });
+  $('#authBtn').textContent = state.isAdmin ? 'Esci' : 'Organizzatore';
+  showStatus('');
+  renderTappe();
+  if (!state.started) { state.started = true; startGiri(); }
+});
+
+$('#authBtn').addEventListener('click', () => {
+  if (state.isAdmin) { signOut(auth); return; }
+  $('#loginErr').textContent = '';
+  $('#loginDlg').showModal();
+});
+$('#loginCancel').addEventListener('click', () => $('#loginDlg').close());
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('#loginErr').textContent = '';
+  try {
+    await signInWithEmailAndPassword(auth, $('#email').value.trim(), $('#password').value);
+    $('#password').value = '';
+    $('#loginDlg').close();
+  } catch (err) {
+    $('#loginErr').textContent = 'Email o password non corretti.';
+  }
+});
+
+// ---------- Giri ----------
+function startGiri(){
+  onSnapshot(query(collection(db, 'giri'), orderBy('creato', 'desc')), snap => {
+    state.giri = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderGiri();
+  }, err => showStatus(humanErr(err)));
+}
+function renderGiri(){
+  const sel = $('#giroSelect');
+  sel.replaceChildren();
+  if (!state.giri.length) {
+    sel.appendChild(el('option', '', 'Nessun giro'));
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+    state.giri.forEach(g => { const o = el('option', '', g.nome || 'Giro'); o.value = g.id; sel.appendChild(o); });
+  }
+  let wanted = state.giroId || store('giroId');
+  if (!state.giri.some(g => g.id === wanted)) wanted = state.giri.length ? state.giri[0].id : null;
+  if (wanted) sel.value = wanted;
+  if (wanted !== state.giroId) setGiro(wanted); else renderTappe();
+}
+function setGiro(id){
+  state.giroId = id;
+  if (id) store('giroId', id);
+  if (state.unsubTappe) { state.unsubTappe(); state.unsubTappe = null; }
+  state.tappe = [];
+  state.fit = true;
+  if (!id) { renderTappe(); return; }
+  state.unsubTappe = onSnapshot(collection(db, 'giri', id, 'tappe'), snap => {
+    state.tappe = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTappe();
+  }, err => showStatus(humanErr(err)));
+}
+$('#giroSelect').addEventListener('change', e => setGiro(e.target.value));
+
+$('#newGiroBtn').addEventListener('click', async () => {
+  const nome = (prompt('Nome del giro (es. Giro di novembre)') || '').trim();
+  if (!nome) return;
+  try { await addDoc(collection(db, 'giri'), { nome, creato: serverTimestamp() }); }
+  catch (err) { showStatus(humanErr(err)); }
+});
+$('#delGiroBtn').addEventListener('click', async () => {
+  if (!state.giroId) return;
+  if (!confirm('Eliminare questo giro e tutte le sue tappe?')) return;
+  try {
+    const id = state.giroId;
+    await Promise.all(state.tappe.map(t => deleteDoc(doc(db, 'giri', id, 'tappe', t.id))));
+    await deleteDoc(doc(db, 'giri', id));
+    state.giroId = null;
+  } catch (err) { showStatus(humanErr(err)); }
+});
+
+// ---------- Tappe: elenco e mappa ----------
+function renderTappe(){
+  layer.clearLayers();
+  const list = $('#stops');
+  list.replaceChildren();
+  const empty = $('#empty');
+  const tappe = state.tappe.slice().sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+
+  if (!tappe.length) {
+    empty.hidden = false;
+    if (!state.giri.length) empty.textContent = state.isAdmin ? "Crea il primo giro con «Nuovo giro»." : "Non c'è ancora nessun giro. L'organizzatore lo crea da qui.";
+    else empty.textContent = state.isAdmin ? "Questo giro non ha tappe. Aggiungi la prima con «Aggiungi tappa»." : "Questo giro non ha ancora tappe. L'organizzatore le aggiunge qui.";
+    return;
+  }
+  empty.hidden = true;
+
+  const now = new Date();
+  const nextIdx = tappe.findIndex(t => new Date(t.data + 'T' + (t.ora || '23:59')) >= now);
+  const points = [];
+
+  tappe.forEach((t, i) => {
+    const isNext = i === nextIdx;
+    const n = i + 1;
+    const ll = [t.lat, t.lng];
+    points.push(ll);
+
+    const marker = L.marker(ll, {
+      icon: L.divIcon({ className: 'pin' + (isNext ? ' next' : ''), html: '<span>' + n + '</span>', iconSize: [30, 30], iconAnchor: [15, 15] })
+    }).addTo(layer);
+    const pop = el('div', 'pop');
+    pop.appendChild(el('h3', '', t.nome));
+    pop.appendChild(el('p', '', when(t)));
+    marker.bindPopup(pop);
+
+    const li = el('li', 'stop' + (isNext ? ' next' : ''));
+    li.appendChild(el('span', 'num', String(n)));
+    const body = el('div', 'body');
+    if (isNext) body.appendChild(el('span', 'tag', 'Prossima tappa'));
+    body.appendChild(el('h3', '', t.nome));
+    body.appendChild(el('p', 'when', when(t)));
+    if (t.nota) body.appendChild(el('p', 'nota', t.nota));
+
+    const actions = el('div', 'actions');
+    const nav = el('a', 'btn', 'Naviga');
+    nav.href = navUrl(t); nav.target = '_blank'; nav.rel = 'noopener';
+    actions.appendChild(nav);
+    const see = el('button', 'btn-ghost', 'Sulla mappa'); see.type = 'button';
+    see.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: 'smooth' }); map.flyTo(ll, 14); marker.openPopup(); });
+    actions.appendChild(see);
+    if (state.isAdmin) {
+      const edit = el('button', 'btn-ghost', 'Modifica'); edit.type = 'button';
+      edit.addEventListener('click', () => openTappaForm(t));
+      const del = el('button', 'btn-ghost btn-danger', 'Elimina'); del.type = 'button';
+      del.addEventListener('click', () => removeTappa(t));
+      actions.append(edit, del);
+    }
+    body.appendChild(actions);
+    li.appendChild(body);
+    list.appendChild(li);
+  });
+
+  if (points.length > 1) L.polyline(points, { color: '#0F4C97', weight: 4, opacity: .85 }).addTo(layer);
+  if (state.fit) {
+    state.fit = false;
+    if (points.length === 1) map.setView(points[0], 12);
+    else map.fitBounds(points, { padding: [40, 40] });
+  }
+}
+
+async function removeTappa(t){
+  if (!confirm('Eliminare la tappa «' + t.nome + '»?')) return;
+  try { await deleteDoc(doc(db, 'giri', state.giroId, 'tappe', t.id)); }
+  catch (err) { showStatus(humanErr(err)); }
+}
+
+// ---------- Tappe: modulo ----------
+let formLat = null, formLng = null;
+function setCoords(lat, lng, label){
+  formLat = lat; formLng = lng;
+  $('#fCoord').textContent = label ? 'Punto scelto: ' + label : 'Punto scelto sulla mappa.';
+}
+function openTappaForm(t){
+  if (!state.giroId) { showStatus('Crea prima un giro.'); return; }
+  state.editId = t ? t.id : null;
+  $('#tappaTitle').textContent = t ? 'Modifica tappa' : 'Nuova tappa';
+  $('#fNome').value = t ? t.nome : '';
+  $('#fData').value = t ? t.data : '';
+  $('#fOra').value = t && t.ora ? t.ora : '';
+  $('#fNota').value = t && t.nota ? t.nota : '';
+  $('#fQuery').value = '';
+  $('#fResults').replaceChildren();
+  $('#fErr').textContent = '';
+  if (t) { formLat = t.lat; formLng = t.lng; $('#fCoord').textContent = 'Punto già impostato. Puoi cambiarlo.'; }
+  else { formLat = null; formLng = null; $('#fCoord').textContent = 'Nessun punto scelto.'; }
+  $('#tappaDlg').showModal();
+}
+$('#addBtn').addEventListener('click', () => openTappaForm(null));
+$('#fCancel').addEventListener('click', () => $('#tappaDlg').close());
+
+$('#fSearchBtn').addEventListener('click', async () => {
+  const q = $('#fQuery').value.trim();
+  const box = $('#fResults');
+  box.replaceChildren();
+  if (!q) return;
+  box.appendChild(el('p', 'coord', 'Ricerca in corso…'));
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=it&q=' + encodeURIComponent(q));
+    const data = await r.json();
+    box.replaceChildren();
+    if (!data.length) { box.appendChild(el('p', 'coord', 'Nessun risultato. Prova con un nome diverso o scegli il punto sulla mappa.')); return; }
+    data.forEach(x => {
+      const b = el('button', '', x.display_name); b.type = 'button';
+      b.addEventListener('click', () => {
+        setCoords(parseFloat(x.lat), parseFloat(x.lon), x.display_name.split(',').slice(0, 2).join(','));
+        if (!$('#fNome').value.trim()) $('#fNome').value = x.display_name.split(',')[0];
+        box.replaceChildren();
+      });
+      box.appendChild(b);
+    });
+  } catch (err) {
+    box.replaceChildren();
+    box.appendChild(el('p', 'err', 'Ricerca non riuscita. Scegli il punto sulla mappa.'));
+  }
+});
+
+let pickHandler = null;
+function endPick(){
+  $('#pickBanner').hidden = true;
+  $('#map').classList.remove('picking');
+  if (pickHandler) { map.off('click', pickHandler); pickHandler = null; }
+}
+$('#fPickBtn').addEventListener('click', () => {
+  $('#tappaDlg').close();
+  $('#pickBanner').hidden = false;
+  $('#map').classList.add('picking');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  pickHandler = e => {
+    setCoords(e.latlng.lat, e.latlng.lng);
+    endPick();
+    $('#tappaDlg').showModal();
+  };
+  map.on('click', pickHandler);
+});
+$('#pickCancel').addEventListener('click', () => { endPick(); $('#tappaDlg').showModal(); });
+
+$('#tappaForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const err = $('#fErr');
+  err.textContent = '';
+  if (formLat === null || formLng === null) { err.textContent = 'Scegli il punto: cerca il luogo o toccalo sulla mappa.'; return; }
+  const dati = {
+    nome: $('#fNome').value.trim(),
+    data: $('#fData').value,
+    ora: $('#fOra').value,
+    nota: $('#fNota').value.trim(),
+    lat: formLat,
+    lng: formLng
+  };
+  try {
+    if (state.editId) await updateDoc(doc(db, 'giri', state.giroId, 'tappe', state.editId), dati);
+    else await addDoc(collection(db, 'giri', state.giroId, 'tappe'), dati);
+    $('#tappaDlg').close();
+  } catch (ex) {
+    err.textContent = humanErr(ex);
+  }
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
