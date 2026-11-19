@@ -65,6 +65,7 @@ a.wa.low{background:var(--dopo);border-color:var(--dopo);color:var(--surface)}
 @media (prefers-reduced-motion:reduce){.chip:active{transform:none}}
 .brand{text-align:center;margin:4px 0 18px}
 .brand img{display:block;width:100%;max-width:280px;height:auto;margin:0 auto;border-radius:16px}
+input[type=file]{display:none}
 </style>
 </head>
 <body>
@@ -111,6 +112,16 @@ a.wa.low{background:var(--dopo);border-color:var(--dopo);color:var(--surface)}
   <section>
     <h2>Giorni precedenti</h2>
     <div id="hist"></div>
+  </section>
+  <section>
+    <h2>Copia di sicurezza</h2>
+    <p class="hint">Salva i tuoi dati in un file: se cambi telefono li ritrovi caricando il file.</p>
+    <div class="row">
+      <button class="btn" id="bs">Salva copia</button>
+      <button class="btn" id="br">Ripristina copia</button>
+    </div>
+    <input type="file" id="bf" accept=".json,application/json">
+    <div class="toast" id="bt" role="status" aria-live="polite"></div>
   </section>
 </main>
 <script>
@@ -212,6 +223,35 @@ a.wa.low{background:var(--dopo);border-color:var(--dopo);color:var(--surface)}
     var n=$("sp").value,q=parseFloat($("sq").value.replace(",",".")),d=parseFloat($("sd").value.replace(",","."));
     if(!n||!(q>0))return;
     S.stock[n]={left:q,def:d>0?d:0};save();$("sq").value="";$("sd").value="";stock();
+  };
+  function bmsg(t){$("bt").textContent=t}
+  $("bs").onclick=function(){
+    try{
+      var blob=new Blob([JSON.stringify({app:"titan-lab",v:1,data:S})],{type:"application/json"});
+      var a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download="titan-lab-copia-"+today+".json";
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
+      bmsg("Copia salvata nei Download.");
+    }catch(e){bmsg("Non sono riuscito a salvare la copia.")}
+  };
+  $("br").onclick=function(){$("bf").click()};
+  $("bf").onchange=function(){
+    var f=this.files&&this.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var j=JSON.parse(r.result),d=j&&j.app==="titan-lab"?j.data:null;
+        if(!d||!Array.isArray(d.products)||!Array.isArray(d.log))throw 0;
+        var lg=d.log.filter(function(x){return x&&/^\d{4}-\d{2}-\d{2}$/.test(x.day)&&(x.when==="prima"||x.when==="dopo")&&x.name}).map(function(x){return{id:Number(x.id)||Date.now()+Math.random(),day:x.day,when:x.when,name:String(x.name),dose:String(x.dose||""),u:Number(x.u)||0}});
+        var st={};Object.keys(d.stock||{}).forEach(function(k){var s=d.stock[k];if(s)st[k]={left:Number(s.left)||0,def:Number(s.def)||0}});
+        if(!confirm("Sostituire i dati di questo telefono con quelli della copia?"))return;
+        S={products:d.products.map(String),log:lg,stock:st};
+        save();chips();lists();bmsg("Copia ripristinata.");
+      }catch(e){bmsg("Il file non \u00e8 una copia valida.")}
+    };
+    r.readAsText(f);this.value="";
   };
   chips();lists();
 })();
